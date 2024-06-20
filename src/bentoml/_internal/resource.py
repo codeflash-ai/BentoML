@@ -12,6 +12,7 @@ from abc import abstractmethod
 import psutil
 
 from ..exceptions import BentoMLConfigException
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +41,11 @@ def get_resource(
         return None
 
 
-def system_resources() -> dict[str, t.Any]:
-    res: dict[str, t.Any] = {}
-    for resource_kind, resource in _RESOURCE_REGISTRY.items():
-        res[resource_kind] = resource.from_system()
-    return res
+def system_resources() -> Dict[str, Any]:
+    return {
+        resource_kind: resource.from_system()
+        for resource_kind, resource in _RESOURCE_REGISTRY.items()
+    }
 
 
 class Resource(t.Generic[T], ABC):
