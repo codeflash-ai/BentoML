@@ -240,7 +240,7 @@ class NvidiaGpuResource(Resource[t.List[int]], resource_id="nvidia.com/gpu"):
     @functools.lru_cache(maxsize=1)
     def from_system(cls) -> list[int]:
         """
-        query nvidia gpu count, available on Windows and Linux
+        Query Nvidia GPU count, available on Windows and Linux
         """
         import pynvml  # type: ignore
 
