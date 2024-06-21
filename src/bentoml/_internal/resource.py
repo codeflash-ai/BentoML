@@ -122,12 +122,6 @@ class CpuResource(Resource[float], resource_id="cpu"):
 
 @functools.lru_cache(maxsize=1)
 def query_cgroup_cpu_count() -> float:
-    # Query active cpu processor count using cgroup v1 API, based on OpenJDK
-    # implementation for `active_processor_count` using cgroup v1:
-    # https://github.com/openjdk/jdk/blob/master/src/hotspot/os/linux/cgroupSubsystem_linux.cpp
-    # For cgroup v2, see:
-    # https://github.com/openjdk/jdk/blob/master/src/hotspot/os/linux/cgroupV2Subsystem_linux.cpp
-    # Possible supports: cpuset.cpus on kubernetes
     def _read_cgroup_file(filename: str) -> float:
         with open(filename, "r", encoding="utf-8") as f:
             return int(f.read().strip())
@@ -139,39 +133,27 @@ def query_cgroup_cpu_count() -> float:
 
     quota = None
 
-    if os.path.exists(cfs_quota_us_file) and os.path.exists(cfs_period_us_file):
+    if os.path.isfile(cfs_quota_us_file) and os.path.isfile(cfs_period_us_file):
         try:
             quota = _read_cgroup_file(cfs_quota_us_file) / _read_cgroup_file(
                 cfs_period_us_file
             )
-        except FileNotFoundError as err:
+        except (FileNotFoundError, ValueError) as err:
             logger.warning("Caught exception while calculating CPU quota: %s", err)
-    # reading from cpu.max for cgroup v2
-    elif os.path.exists(cpu_max_file):
+    elif os.path.isfile(cpu_max_file):
         try:
             with open(cpu_max_file, "r", encoding="utf-8") as max_file:
-                cfs_string = max_file.read()
-                quota_str, period_str = cfs_string.split()
-                if quota_str.isnumeric() and period_str.isnumeric():
-                    quota = float(quota_str) / float(period_str)
-                else:
-                    # quota_str is "max" meaning the cpu quota is unset
-                    quota = None
-        except FileNotFoundError as err:
+                cfs_string = max_file.read().strip()
+            quota_str, period_str = cfs_string.split()
+            if quota_str.isnumeric() and period_str.isnumeric():
+                quota = float(quota_str) / float(period_str)
+        except (FileNotFoundError, ValueError) as err:
             logger.warning("Caught exception while calculating CPU quota: %s", err)
-    if quota is not None and quota < 0:
-        quota = None
-    elif quota == 0:
-        quota = 1
 
-    os_cpu_count = float(os.cpu_count() or 1.0)
+    if quota is None or quota <= 0:
+        quota = float(os.cpu_count() or 1)
 
-    limit_count = math.inf
-
-    if quota:
-        limit_count = quota
-
-    return float(min(limit_count, os_cpu_count))
+    return min(quota, os.cpu_count() or 1.0)
 
 
 @functools.lru_cache(maxsize=1)
