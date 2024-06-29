@@ -24,6 +24,9 @@ from ..utils.http import set_cookies
 from ..utils.lazy_loader import LazyLoader
 from ..utils.pkg import find_spec
 from .base import IODescriptor
+import pandas as pd
+import numpy as np
+from bentoml._internal import external_typing as ext
 
 EXC_MSG = "pandas' is required to use PandasDataFrame or PandasSeries. Install with 'pip install bentoml[io-pandas]'"
 
@@ -70,14 +73,13 @@ def _openapi_types(item: t.Any) -> str:  # pragma: no cover
     # convert pandas types to OpenAPI types
     if pd.api.types.is_integer_dtype(item):
         return "integer"
-    elif pd.api.types.is_float_dtype(item):
+    if pd.api.types.is_float_dtype(item):
         return "number"
-    elif pd.api.types.is_string_dtype(item) or pd.api.types.is_datetime64_dtype(item):
+    if pd.api.types.is_string_dtype(item) or pd.api.types.is_datetime64_dtype(item):
         return "string"
-    elif pd.api.types.is_bool_dtype(item):
+    if pd.api.types.is_bool_dtype(item):
         return "boolean"
-    else:
-        return "object"
+    return "object"
 
 
 def _dataframe_openapi_schema(
@@ -945,19 +947,16 @@ class PandasSeries(
     def _convert_dtype(
         self, value: ext.PdDTypeArg | None
     ) -> str | dict[str, t.Any] | None:
-        # TODO: support extension dtypes
-        if LazyType["ext.NpNDArray"]("numpy", "ndarray").isinstance(value):
+        if value is None:
+            return "null"
+        elif isinstance(value, (str, bool)):
+            return str(value)
+        elif LazyType["ext.NpNDArray"]("numpy", "ndarray").isinstance(value):
             return str(value.dtype)
         elif isinstance(value, np.dtype):
             return str(value)
-        elif isinstance(value, str):
-            return value
-        elif isinstance(value, bool):
-            return str(value)
         elif isinstance(value, dict):
             return {str(k): self._convert_dtype(v) for k, v in value.items()}
-        elif value is None:
-            return "null"
         else:
             logger.warning(f"{type(value)} is not yet supported.")
             return None
@@ -1228,3 +1227,32 @@ class PandasSeries(
 
     async def to_proto_v1alpha1(self, obj: ext.PdSeries) -> pb_v1alpha1.Series:
         return await self._to_proto_impl(obj, version="v1alpha1")
+
+    def _convert_dtype(
+        self, value: ext.PdDTypeArg | None
+    ) -> str | dict[str, t.Any] | None:
+        if value is None:
+            return "null"
+        elif isinstance(value, (str, bool)):
+            return str(value)
+        elif LazyType["ext.NpNDArray"]("numpy", "ndarray").isinstance(value):
+            return str(value.dtype)
+        elif isinstance(value, np.dtype):
+            return str(value)
+        elif isinstance(value, dict):
+            return {str(k): self._convert_dtype(v) for k, v in value.items()}
+        else:
+            logger.warning(f"{type(value)} is not yet supported.")
+            return None
+
+    def to_spec(self) -> dict[str, t.Any]:
+        return {
+            "id": self.descriptor_id,
+            "args": {
+                "orient": self._orient,
+                "dtype": self._convert_dtype(self._dtype),
+                "shape": self._shape,
+                "enforce_dtype": self._enforce_dtype,
+                "enforce_shape": self._enforce_shape,
+            },
+        }
