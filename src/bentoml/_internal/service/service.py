@@ -15,7 +15,7 @@ from bentoml.exceptions import BentoMLException
 from ...exceptions import NotFound
 from ...grpc.utils import LATEST_PROTOCOL_VERSION
 from ...grpc.utils import import_grpc
-from ..bento.bento import get_default_svc_readme
+from ..bento.bento import Bento, get_default_svc_readme
 from ..context import ServiceContext as Context
 from ..io_descriptors import IODescriptor
 from ..io_descriptors.base import IOType
