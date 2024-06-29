@@ -39,7 +39,13 @@ def uri_to_path(uri: str) -> str:
     parsed = urlparse(uri)
     if parsed.scheme not in ("file", "filesystem", "unix"):
         raise ValueError("Unsupported URI scheme")
-    host = "{0}{0}{mnt}{0}".format(os.path.sep, mnt=parsed.netloc)
+
+    # Construct host directly if parsed.netloc is empty
+    if parsed.netloc:
+        host = f"{os.path.sep}{os.path.sep}{parsed.netloc}{os.path.sep}"
+    else:
+        host = os.path.sep
+
     return os.path.normpath(os.path.join(host, url2pathname(unquote(parsed.path))))
 
 
