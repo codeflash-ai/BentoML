@@ -480,16 +480,26 @@ if TYPE_CHECKING:
 def model_signature_unstructure_hook(
     model_signature: ModelSignature,
 ) -> dict[str, t.Any]:
-    encoded: dict[str, t.Any] = {
-        "batchable": model_signature.batchable,
-    }
-    # ignore batch_dim if batchable is False
-    if model_signature.batchable:
-        encoded["batch_dim"] = model_signature.batch_dim
-    if model_signature.input_spec is not None:
-        encoded["input_spec"] = model_signature.input_spec
-    if model_signature.output_spec is not None:
-        encoded["output_spec"] = model_signature.output_spec
+    batchable = model_signature.batchable
+    input_spec = model_signature.input_spec
+    output_spec = model_signature.output_spec
+    batch_dim = model_signature.batch_dim
+
+    # Preallocate keys using dict literal based on conditions
+    # This reduces overhead of multiple dict reassignment steps
+    if batchable:
+        encoded: dict[str, t.Any] = {
+            "batchable": batchable,
+            "batch_dim": batch_dim,
+        }
+    else:
+        encoded: dict[str, t.Any] = {
+            "batchable": batchable,
+        }
+    if input_spec is not None:
+        encoded["input_spec"] = input_spec
+    if output_spec is not None:
+        encoded["output_spec"] = output_spec
     return encoded
 
 
