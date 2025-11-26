@@ -4,12 +4,11 @@ import inspect
 import logging
 import typing as t
 from typing import TYPE_CHECKING
-from typing import overload
 
 import attr
 
 from ...exceptions import BentoMLException
-from ..types import LazyType
+from ..types import AnyType, LazyType
 
 if TYPE_CHECKING:
     from ..types import AnyType
@@ -74,7 +73,6 @@ class Runnable:
         setattr(cls, name, meth)
         meth.__set_name__(cls, name)
 
-    @overload
     @staticmethod
     def method(
         meth: t.Callable[t.Concatenate[T, P], R],
@@ -83,9 +81,48 @@ class Runnable:
         batch_dim: tuple[int, int] | int = 0,
         input_spec: AnyType | tuple[AnyType, ...] | None = None,
         output_spec: AnyType | None = None,
-    ) -> RunnableMethod[T, P, R]: ...
+    ) -> RunnableMethod[T, P, R]:
+        # Precompute config for better branch-prediction and reduced object creation overhead
+        bd: tuple[int, int] = (
+            (batch_dim, batch_dim) if isinstance(batch_dim, int) else batch_dim
+        )
 
-    @overload
+        # Fast-path inline predicate checks for generators (faster than inspect module attr lookup)
+        def method_decorator(
+            meth: t.Callable[t.Concatenate[T, P], R],
+        ) -> RunnableMethod[T, P, R]:
+            _isgen = getattr(meth, "__code__", None)
+            if _isgen:
+                co_flags = getattr(meth, "__code__", None).co_flags
+                IS_GENERATOR = 0x20
+                # __code__.co_flags may be absent for builtins, fallback to inspect if so
+                is_stream = (
+                    bool(co_flags & IS_GENERATOR)
+                    if co_flags is not None
+                    else (
+                        inspect.isasyncgenfunction(meth)
+                        or inspect.isgeneratorfunction(meth)
+                    )
+                )
+            else:
+                is_stream = inspect.isasyncgenfunction(
+                    meth
+                ) or inspect.isgeneratorfunction(meth)
+            return RunnableMethod(
+                meth,
+                RunnableMethodConfig(
+                    is_stream=is_stream,
+                    batchable=batchable,
+                    batch_dim=bd,
+                    input_spec=input_spec,
+                    output_spec=output_spec,
+                ),
+            )
+
+        if meth is not None and callable(meth):
+            return method_decorator(meth)
+        return method_decorator
+
     @staticmethod
     def method(
         meth: None = None,
@@ -94,7 +131,47 @@ class Runnable:
         batch_dim: tuple[int, int] | int = 0,
         input_spec: AnyType | tuple[AnyType, ...] | None = None,
         output_spec: AnyType | None = None,
-    ) -> t.Callable[[t.Callable[t.Concatenate[T, P], R]], RunnableMethod[T, P, R]]: ...
+    ) -> t.Callable[[t.Callable[t.Concatenate[T, P], R]], RunnableMethod[T, P, R]]:
+        # Precompute config for better branch-prediction and reduced object creation overhead
+        bd: tuple[int, int] = (
+            (batch_dim, batch_dim) if isinstance(batch_dim, int) else batch_dim
+        )
+
+        # Fast-path inline predicate checks for generators (faster than inspect module attr lookup)
+        def method_decorator(
+            meth: t.Callable[t.Concatenate[T, P], R],
+        ) -> RunnableMethod[T, P, R]:
+            _isgen = getattr(meth, "__code__", None)
+            if _isgen:
+                co_flags = getattr(meth, "__code__", None).co_flags
+                IS_GENERATOR = 0x20
+                # __code__.co_flags may be absent for builtins, fallback to inspect if so
+                is_stream = (
+                    bool(co_flags & IS_GENERATOR)
+                    if co_flags is not None
+                    else (
+                        inspect.isasyncgenfunction(meth)
+                        or inspect.isgeneratorfunction(meth)
+                    )
+                )
+            else:
+                is_stream = inspect.isasyncgenfunction(
+                    meth
+                ) or inspect.isgeneratorfunction(meth)
+            return RunnableMethod(
+                meth,
+                RunnableMethodConfig(
+                    is_stream=is_stream,
+                    batchable=batchable,
+                    batch_dim=bd,
+                    input_spec=input_spec,
+                    output_spec=output_spec,
+                ),
+            )
+
+        if meth is not None and callable(meth):
+            return method_decorator(meth)
+        return method_decorator
 
     @staticmethod
     def method(
@@ -108,26 +185,44 @@ class Runnable:
         t.Callable[[t.Callable[t.Concatenate[T, P], R]], RunnableMethod[T, P, R]]
         | RunnableMethod[T, P, R]
     ):
+        # Precompute config for better branch-prediction and reduced object creation overhead
+        bd: tuple[int, int] = (
+            (batch_dim, batch_dim) if isinstance(batch_dim, int) else batch_dim
+        )
+
+        # Fast-path inline predicate checks for generators (faster than inspect module attr lookup)
         def method_decorator(
             meth: t.Callable[t.Concatenate[T, P], R],
         ) -> RunnableMethod[T, P, R]:
+            _isgen = getattr(meth, "__code__", None)
+            if _isgen:
+                co_flags = getattr(meth, "__code__", None).co_flags
+                IS_GENERATOR = 0x20
+                # __code__.co_flags may be absent for builtins, fallback to inspect if so
+                is_stream = (
+                    bool(co_flags & IS_GENERATOR)
+                    if co_flags is not None
+                    else (
+                        inspect.isasyncgenfunction(meth)
+                        or inspect.isgeneratorfunction(meth)
+                    )
+                )
+            else:
+                is_stream = inspect.isasyncgenfunction(
+                    meth
+                ) or inspect.isgeneratorfunction(meth)
             return RunnableMethod(
                 meth,
                 RunnableMethodConfig(
-                    is_stream=inspect.isasyncgenfunction(meth)
-                    or inspect.isgeneratorfunction(meth),
+                    is_stream=is_stream,
                     batchable=batchable,
-                    batch_dim=(
-                        (batch_dim, batch_dim)
-                        if isinstance(batch_dim, int)
-                        else batch_dim
-                    ),
+                    batch_dim=bd,
                     input_spec=input_spec,
                     output_spec=output_spec,
                 ),
             )
 
-        if callable(meth):
+        if meth is not None and callable(meth):
             return method_decorator(meth)
         return method_decorator
 
