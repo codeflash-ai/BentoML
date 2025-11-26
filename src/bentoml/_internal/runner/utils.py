@@ -72,9 +72,7 @@ class Params(t.Generic[T]):
         Apply function that takes two arguments with given iterable as index to all none empty field in Params.
         """
         if self.args:
-            return Params[To](
-                *tuple(function(a, b) for a, b in zip(self.args, iterable))
-            )
+            return Params[To](*map(function, self.args, iterable))
         return Params[To](
             **{k: function(self.kwargs[k], b) for k, b in zip(self.kwargs, iterable)}
         )
