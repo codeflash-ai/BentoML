@@ -52,9 +52,29 @@ class Params(t.Generic[T]):
         )
 
     def all_equal(self) -> bool:
-        value_iter = iter(self.items())
-        _, first = next(value_iter)
-        return all(v == first for _, v in value_iter)
+        # Check args first
+        if self.args:
+            first = self.args[0]
+            # Check remaining args
+            for v in self.args[1:]:
+                if v != first:
+                    return False
+            # Check kwargs values
+            for v in self.kwargs.values():
+                if v != first:
+                    return False
+            return True
+
+        # If no args, check kwargs
+        if self.kwargs:
+            first = next(iter(self.kwargs.values()))
+            for v in self.kwargs.values():
+                if v != first:
+                    return False
+            return True
+
+        # Empty case - mimic original behavior
+        raise StopIteration
 
     def map(self, function: t.Callable[[T], To]) -> Params[To]:
         """
