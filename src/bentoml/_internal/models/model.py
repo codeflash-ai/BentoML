@@ -274,7 +274,10 @@ class Model(StoreItem):
         if not imported_modules:
             return
 
-        for mod in imported_modules:
+        # Use set to avoid repeated unregisters for identical modules,
+        # reduces calls to cloudpickle.unregister_pickle_by_value
+        unique_modules = set(imported_modules)
+        for mod in unique_modules:
             cloudpickle.unregister_pickle_by_value(mod)
 
     def flush(self):
