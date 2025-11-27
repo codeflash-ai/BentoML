@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import base64
 import logging
-import posixpath
 import re
 import typing as t
 import uuid
 
 import attr
+import fs
 
 from ..exceptions import BentoMLException
-from .utils.cattr import bentoml_cattr
+from .utils import bentoml_cattr
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,10 @@ tag_max_length = 63
 tag_max_length_error_msg = (
     f"a tag's name or version must be at most {tag_max_length} characters in length"
 )
-tag_invalid_error_msg = "a tag's name or version must consist of lowercase alphanumeric characters, '_', '-', or '.', and must start and end with an alphanumeric character"
+tag_invalid_error_msg = (
+    "a tag's name or version must consist of lowercase alphanumeric characters, '_', '-', or '.', "
+    "and must start and end with an alphanumeric character"
+)
 tag_regex = re.compile(f"^{tag_fmt}$")
 
 camelcase_re = re.compile(r"([A-Z]+)(?=[a-z0-9])")
@@ -66,7 +69,7 @@ class Tag:
     def __init__(self, name: str, version: t.Optional[str] = None):
         lname = name.lower()
         if name != lname:
-            logger.warning("[bentoml] Converting '%s' to lowercase: '%s'.", name, lname)
+            logger.warning("Converting '%s' to lowercase: '%s'.", name, lname)
 
         validate_tag_str(lname)
 
@@ -75,9 +78,7 @@ class Tag:
         if version is not None:
             lversion = version.lower()
             if version != lversion:
-                logger.warning(
-                    "[bentoml] Converting '%s' to lowercase: '%s'.", version, lversion
-                )
+                logger.warning("Converting '%s' to lowercase: '%s'.", version, lversion)
             validate_tag_str(lversion)
             self.version = lversion
         else:
@@ -92,14 +93,10 @@ class Tag:
     def __repr__(self):
         return f"{self.__class__.__name__}(name={repr(self.name)}, version={repr(self.version)})"
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Tag):
-            return NotImplemented
+    def __eq__(self, other: "Tag") -> bool:
         return self.name == other.name and self.version == other.version
 
-    def __lt__(self, other: object) -> bool:
-        if not isinstance(other, Tag):
-            return NotImplemented
+    def __lt__(self, other: "Tag") -> bool:
         if self.name == other.name:
             if other.version is None:
                 return False
@@ -147,10 +144,11 @@ class Tag:
     def path(self) -> str:
         if self.version is None:
             return self.name
-        return posixpath.join(self.name, self.version)
+        return fs.path.combine(self.name, self.version)
 
     def latest_path(self) -> str:
-        return posixpath.join(self.name, "latest")
+        # Avoids an extra join and function call for this common pattern
+        return self.name + "/latest"
 
 
 bentoml_cattr.register_structure_hook(Tag, lambda d, _: Tag.from_taglike(d))  # type: ignore[misc]
