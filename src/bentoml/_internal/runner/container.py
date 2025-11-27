@@ -9,7 +9,7 @@ import typing as t
 from typing import Any
 
 from ..types import LazyType
-from ..utils.lazy_loader import LazyLoader
+from ..utils import LazyLoader
 from ..utils.pickle import fixed_torch_loads
 from ..utils.pickle import pep574_dumps
 from ..utils.pickle import pep574_loads
@@ -70,7 +70,9 @@ class DataContainer(t.Generic[SingleType, BatchType]):
         cls, batch: BatchType, indices: t.Sequence[int], batch_dim: int = 0
     ) -> list[Payload]:
         batches = cls.batch_to_batches(batch, indices, batch_dim)
-        payloads = [cls.to_payload(subbatch, batch_dim) for subbatch in batches]
+        # Micro-optimization: use a local variable for cls.to_payload for faster lookup in the loop
+        to_payload = cls.to_payload
+        payloads = [to_payload(subbatch, batch_dim) for subbatch in batches]
         return payloads
 
     @classmethod
@@ -332,9 +334,9 @@ class PandasDataFrameContainer(
     ) -> tuple[ext.PdDataFrame, list[int]]:
         import pandas as pd
 
-        assert batch_dim == 0, (
-            "PandasDataFrameContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "PandasDataFrameContainer does not support batch_dim other than 0"
         indices = list(
             itertools.accumulate(subbatch.shape[batch_dim] for subbatch in batches)
         )
@@ -348,9 +350,9 @@ class PandasDataFrameContainer(
         indices: t.Sequence[int],
         batch_dim: int = 0,
     ) -> list[ext.PdDataFrame]:
-        assert batch_dim == 0, (
-            "PandasDataFrameContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "PandasDataFrameContainer does not support batch_dim other than 0"
 
         return [
             batch.iloc[indices[i] : indices[i + 1]].reset_index(drop=True)
@@ -365,9 +367,9 @@ class PandasDataFrameContainer(
     ) -> Payload:
         import pandas as pd
 
-        assert batch_dim == 0, (
-            "PandasDataFrameContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "PandasDataFrameContainer does not support batch_dim other than 0"
 
         if isinstance(batch, pd.Series):
             batch = pd.DataFrame([batch])
@@ -402,9 +404,9 @@ class PandasDataFrameContainer(
     def get_batch_size(
         cls, batch: ext.PdDataFrame | ext.PdSeries, batch_dim: int
     ) -> int:
-        assert batch_dim == 0, (
-            "PandasDataFrameContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "PandasDataFrameContainer does not support batch_dim other than 0"
         return batch.shape
 
     @classmethod
@@ -476,9 +478,12 @@ class ParamsContainer(DataContainer[Params[Payload], Params[Payload]]):
             ),
         )
         batch_param, indices, *_ = converted.iter()
-        return t.cast("Params[t.Any]", batch_param).map(
-            lambda x: AutoContainer.to_payload(x, batch_dim)
-        ), t.cast("Params[list[int]]", indices).sample
+        return (
+            t.cast("Params[t.Any]", batch_param).map(
+                lambda x: AutoContainer.to_payload(x, batch_dim)
+            ),
+            t.cast("Params[list[int]]", indices).sample,
+        )
 
     @classmethod
     def batch_to_batches(
@@ -545,9 +550,9 @@ class DefaultContainer(DataContainer[t.Any, t.List[t.Any]]):
     def batches_to_batch(
         cls, batches: t.Sequence[list[t.Any]], batch_dim: int = 0
     ) -> tuple[list[t.Any], list[int]]:
-        assert batch_dim == 0, (
-            "Default Runner DataContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "Default Runner DataContainer does not support batch_dim other than 0"
         batch: list[t.Any] = []
         for subbatch in batches:
             batch.extend(subbatch)
@@ -559,9 +564,9 @@ class DefaultContainer(DataContainer[t.Any, t.List[t.Any]]):
     def batch_to_batches(
         cls, batch: list[t.Any], indices: t.Sequence[int], batch_dim: int = 0
     ) -> list[list[t.Any]]:
-        assert batch_dim == 0, (
-            "Default Runner DataContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "Default Runner DataContainer does not support batch_dim other than 0"
         return [batch[indices[i] : indices[i + 1]] for i in range(len(indices) - 1)]
 
     @classmethod
