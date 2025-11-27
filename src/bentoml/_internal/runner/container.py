@@ -9,7 +9,7 @@ import typing as t
 from typing import Any
 
 from ..types import LazyType
-from ..utils.lazy_loader import LazyLoader
+from ..utils import LazyLoader
 from ..utils.pickle import fixed_torch_loads
 from ..utils.pickle import pep574_dumps
 from ..utils.pickle import pep574_loads
@@ -332,9 +332,9 @@ class PandasDataFrameContainer(
     ) -> tuple[ext.PdDataFrame, list[int]]:
         import pandas as pd
 
-        assert batch_dim == 0, (
-            "PandasDataFrameContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "PandasDataFrameContainer does not support batch_dim other than 0"
         indices = list(
             itertools.accumulate(subbatch.shape[batch_dim] for subbatch in batches)
         )
@@ -348,9 +348,9 @@ class PandasDataFrameContainer(
         indices: t.Sequence[int],
         batch_dim: int = 0,
     ) -> list[ext.PdDataFrame]:
-        assert batch_dim == 0, (
-            "PandasDataFrameContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "PandasDataFrameContainer does not support batch_dim other than 0"
 
         return [
             batch.iloc[indices[i] : indices[i + 1]].reset_index(drop=True)
@@ -365,9 +365,9 @@ class PandasDataFrameContainer(
     ) -> Payload:
         import pandas as pd
 
-        assert batch_dim == 0, (
-            "PandasDataFrameContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "PandasDataFrameContainer does not support batch_dim other than 0"
 
         if isinstance(batch, pd.Series):
             batch = pd.DataFrame([batch])
@@ -402,9 +402,9 @@ class PandasDataFrameContainer(
     def get_batch_size(
         cls, batch: ext.PdDataFrame | ext.PdSeries, batch_dim: int
     ) -> int:
-        assert batch_dim == 0, (
-            "PandasDataFrameContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "PandasDataFrameContainer does not support batch_dim other than 0"
         return batch.shape
 
     @classmethod
@@ -476,9 +476,12 @@ class ParamsContainer(DataContainer[Params[Payload], Params[Payload]]):
             ),
         )
         batch_param, indices, *_ = converted.iter()
-        return t.cast("Params[t.Any]", batch_param).map(
-            lambda x: AutoContainer.to_payload(x, batch_dim)
-        ), t.cast("Params[list[int]]", indices).sample
+        return (
+            t.cast("Params[t.Any]", batch_param).map(
+                lambda x: AutoContainer.to_payload(x, batch_dim)
+            ),
+            t.cast("Params[list[int]]", indices).sample,
+        )
 
     @classmethod
     def batch_to_batches(
@@ -545,9 +548,9 @@ class DefaultContainer(DataContainer[t.Any, t.List[t.Any]]):
     def batches_to_batch(
         cls, batches: t.Sequence[list[t.Any]], batch_dim: int = 0
     ) -> tuple[list[t.Any], list[int]]:
-        assert batch_dim == 0, (
-            "Default Runner DataContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "Default Runner DataContainer does not support batch_dim other than 0"
         batch: list[t.Any] = []
         for subbatch in batches:
             batch.extend(subbatch)
@@ -559,23 +562,28 @@ class DefaultContainer(DataContainer[t.Any, t.List[t.Any]]):
     def batch_to_batches(
         cls, batch: list[t.Any], indices: t.Sequence[int], batch_dim: int = 0
     ) -> list[list[t.Any]]:
-        assert batch_dim == 0, (
-            "Default Runner DataContainer does not support batch_dim other than 0"
-        )
+        assert (
+            batch_dim == 0
+        ), "Default Runner DataContainer does not support batch_dim other than 0"
         return [batch[indices[i] : indices[i + 1]] for i in range(len(indices) - 1)]
 
     @classmethod
     def to_payload(cls, batch: t.Any, batch_dim: int) -> Payload:
+        # Fast-path check for common list case, avoiding extra isinstance & cast logic
+        if type(batch) is list:
+            data = pickle.dumps(batch)
+            batch_size = len(batch)
+            return cls.create_payload(data=data, batch_size=batch_size)
+        # Only convert generator to list if needed
         if isinstance(batch, t.Generator):  # Generators can't be pickled
             batch = list(t.cast(t.Generator[t.Any, t.Any, t.Any], batch))
 
+            data = pickle.dumps(batch)
+            batch_size = len(batch)
+            return cls.create_payload(data=data, batch_size=batch_size)
+        # Other types: pickle as single
         data = pickle.dumps(batch)
-
-        if isinstance(batch, list):
-            batch_size = len(t.cast(t.List[t.Any], batch))
-        else:
-            batch_size = 1
-
+        batch_size = 1
         return cls.create_payload(data=data, batch_size=batch_size)
 
     @classmethod
