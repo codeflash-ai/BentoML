@@ -61,7 +61,7 @@ class Params(t.Generic[T]):
         Apply a function to all the values in the Params and return a Params of the
         return values.
         """
-        args = tuple(function(a) for a in self.args)
+        args = tuple(map(function, self.args))
         kwargs = {k: function(v) for k, v in self.kwargs.items()}
         return Params[To](*args, **kwargs)
 
