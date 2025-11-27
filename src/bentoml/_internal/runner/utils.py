@@ -46,10 +46,20 @@ class Params(t.Generic[T]):
 
     @classmethod
     def from_dict(cls, data: dict[str | int, T]) -> Params[T]:
-        return cls(
-            *(data[k] for k in sorted(k for k in data if isinstance(k, int))),
-            **{k: v for k, v in data.items() if isinstance(k, str)},
-        )
+        # Optimize by preallocating lists, minimizing generator and dict overhead
+        int_keys = []
+        str_kwargs = {}
+        for k, v in data.items():
+            if isinstance(k, int):
+                int_keys.append(k)
+            elif isinstance(k, str):
+                str_kwargs[k] = v
+        if int_keys:
+            int_keys.sort()
+            arg_values = [data[k] for k in int_keys]
+        else:
+            arg_values = []
+        return cls(*arg_values, **str_kwargs)
 
     def all_equal(self) -> bool:
         value_iter = iter(self.items())
