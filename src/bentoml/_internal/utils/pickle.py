@@ -28,18 +28,21 @@ def pep574_dumps(obj: t.Any) -> tuple[bytes, bytes, list[int]]:
     if not buffers:
         return main_bytes, b"", []
 
-    buffer_bytess: list[bytes] = [buff.raw().tobytes() for buff in buffers]
+    indices: list[int] = [0]
+    concat_buffer_bytes_parts = []
+    append_part = concat_buffer_bytes_parts.append  # local ref for speed
+    last_index = 0
+    # Combine buffer extraction and index construction in a single loop for efficiency
+    for buff in buffers:
+        buf_bytes = buff.raw().tobytes()
+        append_part(buf_bytes)
+        last_index = indices[-1] + len(buf_bytes)
+        indices.append(last_index)
+    concat_buffer_bytes: bytes = b"".join(concat_buffer_bytes_parts)
+    # Release all buffers after use
 
     for buff in buffers:
         buff.release()
-
-    indices: list[int] = [0]
-    for buff_bytes in buffer_bytess:
-        start = indices[-1]
-        end = start + len(buff_bytes)
-        indices.append(end)
-
-    concat_buffer_bytes: bytes = b"".join(buffer_bytess)
     return main_bytes, concat_buffer_bytes, indices
 
 
