@@ -28,18 +28,22 @@ def pep574_dumps(obj: t.Any) -> tuple[bytes, bytes, list[int]]:
     if not buffers:
         return main_bytes, b"", []
 
-    buffer_bytess: list[bytes] = [buff.raw().tobytes() for buff in buffers]
+    # More efficient single-pass accumulation without creating an intermediate list of bytes
+    indices: list[int] = [0]
+    buffer_views = []
+    total_len = 0
+    for buff in buffers:
+        mv = buff.raw()
+        mv_len = len(mv)
+        total_len += mv_len
+        indices.append(total_len)
+        buffer_views.append(mv)
+
+    concat_buffer_bytes: bytes = b"".join(buffer_views)
+
 
     for buff in buffers:
         buff.release()
-
-    indices: list[int] = [0]
-    for buff_bytes in buffer_bytess:
-        start = indices[-1]
-        end = start + len(buff_bytes)
-        indices.append(end)
-
-    concat_buffer_bytes: bytes = b"".join(buffer_bytess)
     return main_bytes, concat_buffer_bytes, indices
 
 
