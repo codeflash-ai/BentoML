@@ -24,6 +24,8 @@ from ..utils.http import set_cookies
 from ..utils.lazy_loader import LazyLoader
 from ..utils.pkg import find_spec
 from .base import IODescriptor
+import pandas as pd
+from bentoml._internal import external_typing as ext
 
 EXC_MSG = "pandas' is required to use PandasDataFrame or PandasSeries. Install with 'pip install bentoml[io-pandas]'"
 
@@ -70,14 +72,13 @@ def _openapi_types(item: t.Any) -> str:  # pragma: no cover
     # convert pandas types to OpenAPI types
     if pd.api.types.is_integer_dtype(item):
         return "integer"
-    elif pd.api.types.is_float_dtype(item):
+    if pd.api.types.is_float_dtype(item):
         return "number"
-    elif pd.api.types.is_string_dtype(item) or pd.api.types.is_datetime64_dtype(item):
+    if pd.api.types.is_string_dtype(item) or pd.api.types.is_datetime64_dtype(item):
         return "string"
-    elif pd.api.types.is_bool_dtype(item):
+    if pd.api.types.is_bool_dtype(item):
         return "boolean"
-    else:
-        return "object"
+    return "object"
 
 
 def _dataframe_openapi_schema(
@@ -926,7 +927,7 @@ class PandasSeries(
            from bentoml.io import PandasSeries
 
            arr = [1,2,3]
-           input_spec = PandasSeries.from_sample(pd.DataFrame(arr))
+           input_spec = PandasSeries.from_sample(pd.Series(arr))  # Corrected from DataFrame to Series
 
            @svc.api(input=input_spec, output=PandasSeries())
            def predict(inputs: pd.Series) -> pd.Series: ...
